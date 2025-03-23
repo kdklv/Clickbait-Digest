@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Summarizer (Gemini)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin-right: 5px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #2c65c8;
+        }
+
+        #summary {
+            width: 100%;
+            height: 50vh;
+            margin-top: 10px;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: none; /* Prevent user resizing */
+        }
+        .temp-buttons {
+            margin-bottom: 10px;
+        }
+
+        .temp-buttons button {
+            background-color: #eee;
+            color: #333;
+        }
+
+        .temp-buttons button.selected {
+            background-color: #4285f4;
+            color: white;
+        }
+        #error {
+            color: red;
+            margin-top: 10px;
+        }
+        /*Loading animation*/
+        #summary.loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* ------------------ */
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        input[type="range"] {
+            width: 70%;
+        }
+
+        #lengthValue {
+            margin-left: 0.5rem;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>YouTube Summarizer (Gemini)</h1>
+
+    <label for="youtubeUrl">YouTube Video URL:</label>
+    <input type="text" id="youtubeUrl" placeholder="Enter YouTube video URL">
+
+    <div class="temp-buttons">
+        <button data-temp="0.2">Low Skepticism</button>
+        <button data-temp="0.5" class="selected">Medium Skepticism</button>
+        <button data-temp="0.8">High Skepticism</button>
+    </div>
+
+    <div class="slider-container">
+        <label for="length">Summary Length:</label>
+        <input type="range" id="length" min="100" max="400" step="1" value="250">
+        <span id="lengthValue">250 words</span>
+    </div>
+
+    <button id="submitBtn">Summarize</button>
+
+    <textarea id="summary" placeholder="Summary will appear here..." readonly></textarea>
+    <div id="error"></div>
+
+
+  <script>
+    const youtubeUrlInput = document.getElementById('youtubeUrl');
+    const submitBtn = document.getElementById('submitBtn');
+    const summaryTextArea = document.getElementById('summary');
+    const errorDiv = document.getElementById('error');
+    const tempButtons = document.querySelectorAll('.temp-buttons button');
+    const lengthSlider = document.getElementById('length');
+    const lengthValueSpan = document.getElementById('lengthValue');
+    let selectedTemperature = 0.5; // Default temperature
+    let selectedLength = 250; // Default length
+
+    // Hardcoded Gemini API Key
+    const geminiApiKey = "GEMINI_API_KEY"; // Replace with YOUR API key
+
+    // Temperature button click handlers
+    tempButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Remove 'selected' class from all buttons
+            tempButtons.forEach(btn => btn.classList.remove('selected'));
+            // Add 'selected' class to the clicked button
+            this.classList.add('selected');
+            // Update selectedTemperature
+            selectedTemperature = parseFloat(this.dataset.temp);
+        });
+    });
+
+    lengthSlider.addEventListener('input', function() {
+        selectedLength = parseInt(this.value);
+        lengthValueSpan.textContent = selectedLength + " words";
+    });
+
+    submitBtn.addEventListener('click', async () => {
+        const youtubeUrl = youtubeUrlInput.value;
+        if (!youtubeUrl) {
+            displayMessage('Please enter a YouTube video URL.', 'red');
+            return;
+        }
+
+        // Extract video ID
+        const videoId = extractVideoId(youtubeUrl);
+        if (!videoId) {
+            displayMessage('Invalid YouTube URL.', 'red');
+            return;
+        }
+
+        errorDiv.textContent = ''; // Clear previous errors
+          //Start loading animation
+        summaryTextArea.classList.add('loading');
+        summaryTextArea.innerHTML = 'Noticing...';
+
+        try {
+            // We call getVideoTranscript with the videoId and title
+            await getVideoTranscript(videoId, youtubeUrl);
+
+        } catch (error) {
+            displayMessage(error.message, 'red');
+            summaryTextArea.classList.remove('loading');
+            summaryTextArea.value = '';
+        }
+    });
+
+        // --- Transcript Retrieval and Summarization Logic ---
+    async function getVideoTranscript(videoId, videoTitle) {
+      console.log("getVideoTranscript called with videoId:", videoId, "and title:", videoTitle);
+        try {
+            // Try 1: get_video_info without el=embedded
+            let transcriptText = await fetchTranscriptFromVideoInfo(videoId);
+             if (transcriptText) {
+                console.log("Transcript found via get_video_info");
+                await generateSummary(videoTitle, transcriptText, selectedTemperature, selectedLength);
+                return; // Exit if successful
+            }
+
+            // Try 2: Scrape ytInitialPlayerResponse if get_video_info fails
+            transcriptText = await scrapeTranscript(videoId);
+              if (transcriptText) {
+                console.log("Transcript found via scrapeTranscript");
+                await generateSummary(videoTitle, transcriptText, selectedTemperature, selectedLength);
+                return; // Exit if successful
+            }
+
+            // Try 3: Fallback to Gemini with page content
+            console.log("Falling back to page content summarization.");
+            const pageContent = await fetchYouTubePage(videoId); // Fetch the page content
+            await generateSummaryFromPageContent(videoTitle, pageContent, selectedTemperature, selectedLength); // Use page content
+
+        } catch (error) {
+             displayMessage(error.message, 'red');
+            summaryTextArea.value = '';
+            summaryTextArea.classList.remove('loading');
+            summaryTextArea.innerHTML = '';
+        }
+    }
+
+    async function fetchTranscriptFromVideoInfo(videoId) {
+        console.log("Attempting to fetch transcript from get_video_info...");
+        try {
+            const response = await fetch(`https://www.youtube.com/get_video_info?video_id=${videoId}&hl=en`); // No el=embedded
+
+            if (!response.ok) {
+                console.warn(`get_video_info failed: ${response.status}`);
+                return null; // Don't throw, try the fallback
+            }
+
+            const videoInfo = await response.text();
+            const parsedVideoInfo = parseQueryString(videoInfo);
+
+            if (!parsedVideoInfo.player_response) {
+                console.warn('No player_response in get_video_info.');
+                return null;
+            }
+            const playerResponse = JSON.parse(parsedVideoInfo.player_response);
+
+            if (!playerResponse.captions) {
+                console.warn('No captions in get_video_info player_response.');
+                return null;
+            }
+
+            const captionTracks = playerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
+
+            if (!captionTracks || captionTracks.length === 0) {
+                console.warn('No caption tracks found in get_video_info.');
+                return null;
+            }
+
+            // Find English caption track
+            let baseUrl = null;
+            for (const track of captionTracks) {
+                if (track.languageCode === 'en') {
+                    baseUrl = track.baseUrl;
+                    break;
+                }
+            }
+
+            if (!baseUrl) {
+                console.warn('No English caption track found in get_video_info.');
+                return null;
+            }
+
+            console.log("Fetching transcript from:", baseUrl);
+            const transcriptResponse = await fetch(baseUrl);
+            if (!transcriptResponse.ok) {
+                console.warn(`Failed to download transcript from get_video_info: ${transcriptResponse.status}`);
+                return null;
+            }
+            const transcriptXml = await transcriptResponse.text();
+            console.log("Transcript XML fetched successfully.");
+            return parseTranscriptXml(transcriptXml);
+
+        } catch (error) {
+            console.warn('Error in fetchTranscriptFromVideoInfo:', error);
+            return null; // Try fallback
+        }
+    }
+    async function scrapeTranscript(videoId) {
+        console.log("Attempting to scrape transcript...");
+        try {
+             // Use a CORS proxy to avoid cross-origin issues
+            const proxyUrl = 'https://corsproxy.io/?'; // A reliable CORS proxy.  Consider alternatives if needed.
+            const youtubePageUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            const response = await fetch(proxyUrl + encodeURIComponent(youtubePageUrl));
+
+            if (!response.ok) {
+              console.warn(`scrapeTranscript page fetch failed: ${response.status}`);
+              return null;
+            }
+
+            const pageHtml = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(pageHtml, 'text/html');
+
+            // Find the script tag containing ytInitialPlayerResponse
+            const scriptTags = doc.querySelectorAll('script');
+            let ytInitialPlayerResponse = null;
+            for (const script of scriptTags) {
+                if (script.textContent.includes('ytInitialPlayerResponse')) {
+                    // Extract the JSON object from the script tag
+                    const jsonStr = script.textContent.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
+                    if (jsonStr && jsonStr[1]) {
+                        ytInitialPlayerResponse = JSON.parse(jsonStr[1]);
+                        break;  // Exit loop once found
+                    }
+                }
+            }
+            if (!ytInitialPlayerResponse) {
+                console.warn('No ytInitialPlayerResponse found.');
+                return null;
+              }
+
+            const captionTracks = ytInitialPlayerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks; //Use optional chaining
+            if (!captionTracks || captionTracks.length === 0) {
+                console.warn('No caption tracks found in ytInitialPlayerResponse.');
+                return null;
+            }
+
+            //Find english
+            let baseUrl = null;
+            for (const track of captionTracks) {
+                if (track.languageCode === 'en') {
+                    baseUrl = track.baseUrl;
+                    break;
+                }
+            }
+
+            if (!baseUrl) {
+                console.warn('No English caption track found in ytInitialPlayerResponse.');
+                return null;
+              }
+
+            const transcriptResponse = await fetch(baseUrl);
+            if (!transcriptResponse.ok) {
+                console.warn(`Failed to download transcript from scraped URL: ${transcriptResponse.status}`);
+                return null;
+            }
+            const transcriptXml = await transcriptResponse.text();
+             console.log("Transcript XML fetched successfully.");
+            return parseTranscriptXml(transcriptXml);
+
+        } catch (error) {
+            console.error('Error in scrapeTranscript:', error);
+            return null;
+        }
+    }
+    async function fetchYouTubePage(videoId){
+         try {
+            // Use a CORS proxy to avoid cross-origin issues
+            const proxyUrl = 'https://corsproxy.io/?'; // A reliable CORS proxy.  Consider alternatives if needed.
+            const youtubePageUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            const response = await fetch(proxyUrl + encodeURIComponent(youtubePageUrl));
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch YouTube page: ${response.status}`);
+            }
+
+            const pageHtml = await response.text();
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(pageHtml, 'text/html');
+             // Extract and clean the page content
+            let pageText = doc.body.innerText;
+
+            // Remove likely irrelevant sections (comments, recommendations, etc.)
+            pageText = pageText.replace(/Comments\s*(\n.*)*/g, ''); // Remove "Comments" and everything after
+            pageText = pageText.replace(/Up next\s*Autoplay.*/g, '');  // Remove "Up next" section
+            pageText = pageText.replace(/People also watched\s*(\n.*)*/g, ''); // Remove "People also watched"
+
+            // Remove excessive whitespace and newlines
+            pageText = pageText.replace(/\s+/g, ' ').trim();
+
+            return pageText;
+
+        } catch (error) {
+            throw new Error(`Error fetching YouTube page: ${error.message}`);
+        }
+    }
+
+    async function generateSummaryFromPageContent(videoTitle, pageContent, temperature, length) {
+      console.log("generateSummaryFromPageContent called");
+        try {
+            const question = extractQuestionFromTitle(videoTitle);
+
+            // --- IMPROVED PROMPT ---
+            const prompt = `Analyze the following YouTube video page content and provide a concise, skeptical summary addressing the core question or claim in the title. The summary should be approximately ${length} words long. Ignore irrelevant chatter and promotional text. Focus on factual information directly related to the title.
+
+Title: ${videoTitle}
+Question: ${question}
+
+Page Content:
+${pageContent}
+
+Summary (Skeptical, Concise, Main Points Only):`;
+            // --- END IMPROVED PROMPT ---
+
+            const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiApiKey, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }],
+                    generationConfig: {
+                        temperature: temperature,
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Gemini API error: ${errorData.error.message}`);
+            }
+
+            const data = await response.json();
+             if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+                const summary = data.candidates[0].content.parts[0].text;
+                summaryTextArea.value = summary;
+            } else {
+                console.error("Unexpected response structure:", data);
+                throw new Error("Gemini API returned an unexpected response structure.");
+            }
+        } catch (error) {
+            displayMessage(error.message, 'red');
+             summaryTextArea.value = '';
+        } finally {
+            summaryTextArea.classList.remove('loading');
+        }
+    }
+
+     async function generateSummary(videoTitle, transcript, temperature, length) {
+        console.log("generateSummary called with transcript");
+        try {
+            const question = extractQuestionFromTitle(videoTitle);
+
+            // --- IMPROVED PROMPT (Transcript Version) ---
+            const prompt = `Provide a concise and skeptical summary of the following YouTube video transcript. The summary should be approximately ${length} words long. Focus on the main points and arguments related to the question: "${question}".
+
+Title: ${videoTitle}
+Transcript:
+${transcript}
+
+Summary (Skeptical, Concise, Main Points Only):`;
+            // --- END IMPROVED PROMPT ---
+
+            const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiApiKey, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }],
+                    generationConfig: {
+                        temperature: temperature,
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Gemini API error: ${errorData.error.message}`);
+            }
+
+            const data = await response.json();
+            if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+                const summary = data.candidates[0].content.parts[0].text;
+                summaryTextArea.value = summary;
+            } else {
+                console.error("Unexpected response structure:", data);
+                throw new Error("Gemini API returned an unexpected response structure.");
+            }
+        } catch (error) {
+            displayMessage(error.message, 'red');
+            summaryTextArea.value = '';
+        } finally {
+            summaryTextArea.classList.remove('loading');
+        }
+    }
+
+    function parseTranscriptXml(xmlString) {
+        console.log("Parsing transcript XML...");
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        const textNodes = xmlDoc.getElementsByTagName("text");
+        let transcript = "";
+
+        for (let i = 0; i < textNodes.length; i++) {
+            transcript += textNodes[i].textContent.replace(/'/g, "'") + " "; // Replace HTML entity with apostrophe
+        }
+
+        console.log("Parsed transcript:", transcript);
+        return transcript.trim();
+    }
+     function extractQuestionFromTitle(title) {
+        // Improved clickbait detection
+        const clickbaitPatterns = [
+            /you won't believe/i,
+            /the real reason/i,
+            /what happened next/i,
+            /this is why/i,
+            /shocking/i,
+            /unbelievable/i,
+            /secret/i,
+            /\?$/ //Ends with question mark
+        ];
+
+        for (const pattern of clickbaitPatterns) {
+            if (pattern.test(title)) {
+                if (title.includes("?")) {
+                    const endIndex = title.lastIndexOf("?");
+                    return title.substring(0, endIndex + 1); //extract question
+                }
+                return title;
+            }
+        }
+        return title;
+    }
+
+    function extractVideoId(url) {
+        try {
+            const urlObj = new URL(url);
+            return urlObj.searchParams.get('v');
+        } catch (error) {
+            return null; // Invalid URL
+        }
+    }
+    function displayMessage(message, color = 'black') {
+        errorDiv.textContent = message;
+        errorDiv.style.color = color;
+    }
+    function parseQueryString(queryString) {
+        const queryParams = {};
+        const pairs = queryString.split('&');
+
+        for (const pair of pairs) {
+            const [key, value] = pair.split('=').map(decodeURIComponent);
+            queryParams[key] = value;
+        }
+
+        return queryParams;
+    }
+</script>
+</body>
+</html>
