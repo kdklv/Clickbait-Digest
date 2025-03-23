@@ -349,7 +349,7 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
             const data = await response.json();
              if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
                 const summary = data.candidates[0].content.parts[0].text;
-                summaryTextArea.value = summary;
+                await typeText(summaryTextArea, summary);
             } else {
                 console.error("Unexpected response structure:", data);
                 throw new Error("Gemini API returned an unexpected response structure.");
@@ -403,7 +403,7 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
             const data = await response.json();
             if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
                 const summary = data.candidates[0].content.parts[0].text;
-                summaryTextArea.value = summary;
+                await typeText(summaryTextArea, summary);
             } else {
                 console.error("Unexpected response structure:", data);
                 throw new Error("Gemini API returned an unexpected response structure.");
@@ -413,6 +413,14 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
              summaryTextArea.value = '';
         } finally {
           summaryTextArea.classList.remove('loading');
+        }
+    }
+
+    async function typeText(element, text, speed = 1) {
+        element.value = '';
+        for (let i = 0; i < text.length; i++) {
+            element.value += text[i];
+            await new Promise(resolve => setTimeout(resolve, speed));
         }
     }
 
@@ -445,6 +453,16 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
             /shocking/i,
             /unbelievable/i,
             /secret/i,
+            /they don't want you to know/i,
+            /this changes everything/i,
+            /biggest mistake/i,
+            /nobody talks about this/i,
+            /hidden secrets/i,
+            /wait until you see/i,
+            /i was wrong about/i,
+            /you need to see this/i,
+            /don't do this/i,
+            /it finally happened/i,
             /\?$/ //Ends with question mark
         ];
 
