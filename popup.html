@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clickbait Resolver</title>
+    <title>Clickbait-Digest</title>
     <style>
-       body {
+         body {
             font-family: sans-serif;
             margin: 20px;
             width: 400px; /* Set a fixed width */
+            position: relative;
+            min-height: 450px;
         }
 
         label {
@@ -33,15 +35,22 @@
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            transition: all 0.3s ease;
         }
 
         button:hover {
             background-color: #2c65c8;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
         }
 
         #summary {
             width: 100%;
-            height: 200px;
+            height: 250px;
             margin-top: 10px;
             padding: 8px;
             box-sizing: border-box;
@@ -59,15 +68,25 @@
             background-color: #eee;
             color: #333;
             flex: 1; /* Make buttons take equal width */
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .temp-buttons button:hover {
+            transform: translateY(-2px);
         }
 
         .temp-buttons button.selected {
             background-color: #4285f4;
             color: white;
+            animation: pulse 2s infinite;
         }
         #error, #success-message { /* Style both error and success */
             margin-top: 10px;
             font-weight: bold;
+            transition: all 0.3s ease;
+            transform-origin: left;
         }
 
         #error{
@@ -92,6 +111,8 @@
             width: 30px;
             height: 30px;
             animation: spin 1s linear infinite;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
         }
 
         @keyframes spin {
@@ -112,13 +133,21 @@
           font-size: 1.2rem;
           color: var(--icon-color);
           cursor: pointer;
-          padding: 0;
-          transition: color 0.2s ease;
+          padding: 0.5rem;
+          transition: color 0.2s ease, transform 0.3s ease;
         }
 
         .icon-button:hover {
           color: var(--icon-hover-color);
+          background: none;  /* Ensure background stays transparent */
+          transform: scale(1.1);  /* Add a subtle scale effect instead */
+          box-shadow: none;  /* Remove any shadow */
         }
+
+        .icon-button:active {
+          transform: scale(1);
+        }
+
         .slider-container {
           display: flex;
           align-items: center;
@@ -126,6 +155,11 @@
         }
         input[type="range"] {
           width: 70%; /* Adjust width as needed */
+          transition: all 0.3s ease;
+        }
+
+        input[type="range"]:hover {
+          transform: scaleY(1.2);
         }
           #skepticismValue, #lengthValue {
           margin-left: 0.5rem;
@@ -153,38 +187,198 @@
           --icon-color: var(--primary-color); /* Color for the icons */
           --icon-hover-color: var(--button-hover-bg);
         }
+
+        #summary.typing {
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            font-family: monospace;
+        }
+
+        @keyframes blink-caret {
+            from, to { border-right-color: transparent }
+            50% { border-right-color: var(--text-color) }
+        }
+
+        #summary.typing {
+            border-right: 2px solid;
+            animation: blink-caret 0.75s step-end infinite;
+        }
+
+        /* Settings panel slide animation */
+        #settings {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            transform-origin: top;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #settings.hidden {
+            transform: translateY(-20px) scale(0.95);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #settings h3 {
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            color: var(--text-color);
+            font-size: 1.2rem;
+        }
+
+        #settings label {
+            color: var(--text-color);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        #settings input[type="password"] {
+            margin-bottom: 1.5rem;
+            padding: 0.75rem;
+            border: 1px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            transition: border-color 0.2s ease;
+        }
+
+        #settings input[type="password"]:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+        }
+
+        #settings button {
+            padding: 0.75rem 1.5rem;
+            margin-right: 1rem;
+            font-size: 0.9rem;
+            border-radius: var(--border-radius);
+        }
+
+        #saveApiKeyBtn {
+            background-color: var(--primary-color);
+        }
+
+        #closeSettingsBtn {
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+        }
+
+        #success-message {
+            padding: 0.75rem;
+            margin-top: 1rem;
+            background-color: rgba(76, 175, 80, 0.1);
+            border-radius: var(--border-radius);
+            font-size: 0.9rem;
+            text-align: center;
+            transform: translateY(0);
+            transition: all 0.3s ease;
+        }
+
+        #success-message.hidden {
+            transform: translateY(-10px);
+            opacity: 0;
+        }
+
+        /* Main content fade animation */
+        #main {
+            transition: opacity 0.3s ease;
+            opacity: 1;
+        }
+
+        #main.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Messages animation */
+        #error:not(:empty), #success-message:not(.hidden) {
+            animation: slideIn 0.3s ease;
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(66, 133, 244, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(66, 133, 244, 0);
+            }
+        }
+
+        /* Refresh button rotation animation */
+        #refreshBtn i {
+            transition: transform 0.5s ease;
+        }
+
+        #refreshBtn:hover i {
+            transform: rotate(180deg);
+        }
+
+        /* Settings icon wiggle animation */
+        #settingsBtn:hover i {
+            animation: wiggle 0.5s ease;
+        }
+
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(0); }
+            25% { transform: rotate(-20deg); }
+            75% { transform: rotate(20deg); }
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h2>Clickbait Resolver</h2>
+    <h2>Clickbait...Digest</h2>
     <div class="button-container">
         <button id="refreshBtn" class="icon-button" title="Refresh"><i class="fas fa-sync-alt"></i></button>
-        <button id="settingsBtn" class="icon-button" title="Settings"><i class="fas fa-cog"></i></button>
-    </div>
+        <button id="settingsBtn" class="icon-button"  title="Settings"><i class="fas fa-cog"></i></button>
+      </div>
 
-    <div id="settings" class="">  <!-- settings div -->
+    <div id="settings" class="hidden">  <!-- settings div -->
         <h3>Settings</h3>
-        <label for="apiKey">Gemini API Key:</label>
-        <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
-        <button id="saveApiKeyBtn">Save API Key</button>
-         <button id="closeSettingsBtn">Close</button>
-        <div id="success-message" class = "hidden">API Key saved successfully!</div>
+        <div class="settings-content">
+            <label for="apiKey">Gemini API Key</label>
+            <input type="password" id="apiKey" placeholder="Enter your API key">
+            <div class="settings-buttons">
+                <button id="saveApiKeyBtn">Save Changes</button>
+                <button id="closeSettingsBtn">Cancel</button>
+            </div>
+            <div id="success-message" class="hidden">API Key saved successfully!</div>
+        </div>
     </div>
 
     <div class = "hidden" id = "main"> <!-- main div -->
         <div class="temp-buttons">
-            <button data-temp="0.2">Low Skepticism</button>
-            <button data-temp="0.5" class="selected">Medium Skepticism</button>
-            <button data-temp="0.8">High Skepticism</button>
+            <button data-prompt-type="low">Low Skepticism</button>
+            <button data-prompt-type="medium" class="selected">Medium Skepticism</button> <!-- Changed data-temp -->
+            <button data-prompt-type="high">High Skepticism</button> <!-- Changed data-temp -->
         </div>
-        <div class="slider-container">
+        <div class="slider-container"> <!-- Keep the length slider -->
             <label for="length">Summary Length:</label>
             <input type="range" id="length" min="100" max="400" step="1" value="250">
             <span id="lengthValue">250 words</span>
         </div>
-
         <textarea id="summary" placeholder="Loading..."></textarea>
     </div>
     <div id="error"></div>

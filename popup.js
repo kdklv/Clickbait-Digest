@@ -16,10 +16,41 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 
 
-
-    let selectedTemperature = 0.5; // Default temperature: Medium
     let selectedLength = 250; // Default length: 250 words
     let geminiApiKey = null;
+
+    // --- Prompts ---
+    const prompts = {
+        low: (videoTitle, question, pageContent, length) => `Provide a concise summary (approximately ${length} words) of the following YouTube video page content, accepting most claims at face value.  Focus on summarizing the main points as presented, without critical analysis.
+
+Title: ${videoTitle}
+Question: ${question}
+
+Page Content:
+${pageContent}
+
+Summary:`,
+
+        medium: (videoTitle, question, pageContent, length) => `Analyze the following YouTube video page content and provide a concise summary (approximately ${length} words) addressing the core question or claim in the title.  Apply a moderate level of skepticism; consider potential biases or exaggerations, but don't be overly critical. Focus on the main points and arguments.
+
+Title: ${videoTitle}
+Question: ${question}
+
+Page Content:
+${pageContent}
+
+Summary:`,
+
+        high: (videoTitle, question, pageContent, length) => `Analyze the following YouTube video page content and provide a concise, *highly skeptical* summary (approximately ${length} words) addressing the core question or claim in the title.  Critically evaluate the information presented.  Identify any potential biases, exaggerations, logical fallacies, or unsubstantiated claims.  Focus on the core arguments, but question their validity.
+
+Title: ${videoTitle}
+Question: ${question}
+
+Page Content:
+${pageContent}
+
+Summary:`,
+    };
 
       // --- Load API Key ---
     chrome.storage.sync.get(['geminiApiKey'], function(result) {
@@ -44,14 +75,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Temperature Button Click Handlers ---
     tempButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            // Remove 'selected' class from all buttons
-            tempButtons.forEach(btn => btn.classList.remove('selected'));
-            // Add 'selected' class to the clicked button
-            this.classList.add('selected');
-            // Update selectedTemperature
-            selectedTemperature = parseFloat(this.dataset.temp);
-            console.log("Skepticism level set to:", selectedTemperature); // Debugging
+    button.addEventListener('click', function() {
+        tempButtons.forEach(btn => btn.classList.remove('selected'));
+        this.classList.add('selected');
+        console.log("Skepticism level set to:", this.dataset.promptType);
         });
     });
 
@@ -122,7 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {
             let transcriptText = await fetchTranscriptFromVideoInfo(videoId);
             if (transcriptText) {
                 console.log("Transcript found via get_video_info");
-                await generateSummary(videoTitle, transcriptText, selectedTemperature, selectedLength); // Pass temp and length
+                await generateSummary(videoTitle, transcriptText, selectedLength); // Pass only length
                 return;
             }
 
@@ -130,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
             transcriptText = await scrapeTranscript(tabId);
             if (transcriptText) {
                 console.log("Transcript found via scrapeTranscript");
-                await generateSummary(videoTitle, transcriptText, selectedTemperature, selectedLength); // Pass temp and length
+                await generateSummary(videoTitle, transcriptText, selectedLength); // Pass only length
                 return;
             }
 
@@ -138,7 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log("Falling back to page content summarization.");
             const pageContent = await getPageContent(tabId); // Get page content directly
             if (pageContent) {
-              await generateSummaryFromPageContent(videoTitle, pageContent, selectedTemperature, selectedLength); // Pass temp and length
+              await generateSummaryFromPageContent(videoTitle, pageContent, selectedLength); // Pass only length
             } else {
                 throw new Error('Could not retrieve transcript or page content.');
             }
@@ -309,21 +336,13 @@ async function scrapeTranscript(tabId) {
             });
         });
     }
-    async function generateSummaryFromPageContent(videoTitle, pageContent, temperature, length) {
+    async function generateSummaryFromPageContent(videoTitle, pageContent, length) {
         console.log("generateSummaryFromPageContent called");
-        try {
+           try {
             const question = extractQuestionFromTitle(videoTitle);
-            // --- IMPROVED PROMPT ---
-            const prompt = `Analyze the following YouTube video page content and provide a concise, skeptical summary addressing the core question or claim in the title.  The summary should be approximately ${length} words long. Ignore irrelevant chatter, promotional text, comments, and recommendations. Focus on factual information directly related to the video's main topic.
+            const selectedPromptType = document.querySelector('.temp-buttons .selected').dataset.promptType;
+            const prompt = prompts[selectedPromptType](videoTitle, question, pageContent, length); // Use the selected prompt
 
-Title: ${videoTitle}
-Question: ${question}
-
-Page Content:
-${pageContent}
-
-Summary (Skeptical, Concise, Approximately ${length} words):`;
-            // --- END IMPROVED PROMPT ---
             const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiApiKey, {
                 method: 'POST',
                 headers: {
@@ -336,7 +355,7 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
                         }]
                     }],
                     generationConfig: {
-                        temperature: temperature,
+                     temperature: 0.5,  //Fixed temperature
                     }
                 })
             });
@@ -349,7 +368,7 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
             const data = await response.json();
              if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
                 const summary = data.candidates[0].content.parts[0].text;
-                await typeText(summaryTextArea, summary);
+                typewriterEffect(summaryTextArea, summary);
             } else {
                 console.error("Unexpected response structure:", data);
                 throw new Error("Gemini API returned an unexpected response structure.");
@@ -363,20 +382,12 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
         }
     }
 
-     async function generateSummary(videoTitle, transcript, temperature, length) {
-      console.log("generateSummary called with transcript");
+     async function generateSummary(videoTitle, transcript, length) {
+        console.log("generateSummary called with transcript");
         try {
             const question = extractQuestionFromTitle(videoTitle);
-
-            // --- IMPROVED PROMPT (Transcript Version) ---
-            const prompt = `Provide a concise and skeptical summary of the following YouTube video transcript. The summary should be approximately ${length} words long. Focus on the main points and arguments related to the question: "${question}".
-
-Title: ${videoTitle}
-Transcript:
-${transcript}
-
-Summary (Skeptical, Concise, Approximately ${length} words):`;
-            // --- END IMPROVED PROMPT ---
+            const selectedPromptType = document.querySelector('.temp-buttons .selected').dataset.promptType;
+            const prompt = prompts[selectedPromptType](videoTitle, question, transcript, length); // Select prompt based on button
 
             const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiApiKey, {
                 method: 'POST',
@@ -390,7 +401,7 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
                         }]
                     }],
                     generationConfig: {
-                        temperature: temperature,
+                         temperature: 0.5, //Fixed temperature
                     }
                 })
             });
@@ -403,7 +414,7 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
             const data = await response.json();
             if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
                 const summary = data.candidates[0].content.parts[0].text;
-                await typeText(summaryTextArea, summary);
+                typewriterEffect(summaryTextArea, summary);
             } else {
                 console.error("Unexpected response structure:", data);
                 throw new Error("Gemini API returned an unexpected response structure.");
@@ -413,14 +424,6 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
              summaryTextArea.value = '';
         } finally {
           summaryTextArea.classList.remove('loading');
-        }
-    }
-
-    async function typeText(element, text, speed = 1) {
-        element.value = '';
-        for (let i = 0; i < text.length; i++) {
-            element.value += text[i];
-            await new Promise(resolve => setTimeout(resolve, speed));
         }
     }
 
@@ -446,10 +449,6 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
             /the real reason/i,
             /what happened next/i,
             /this is why/i,
-            /truth/i,
-            /exposed/i,
-            /revealed/i,
-            /reality/i,
             /shocking/i,
             /unbelievable/i,
             /secret/i,
@@ -463,6 +462,7 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
             /you need to see this/i,
             /don't do this/i,
             /it finally happened/i,
+            /this is a game changer/i,
             /\?$/ //Ends with question mark
         ];
 
@@ -495,6 +495,25 @@ Summary (Skeptical, Concise, Approximately ${length} words):`;
         }
 
         return queryParams;
+    }
+
+    function typewriterEffect(element, text, speed = 10) {
+        let i = 0;
+        element.value = '';
+        element.classList.add('typing');
+        
+        function type() {
+            if (i < text.length) {
+                element.value += text.charAt(i);
+                i++;
+                element.scrollTop = element.scrollHeight;
+                setTimeout(type, speed);
+            } else {
+                element.classList.remove('typing');
+            }
+        }
+        
+        type();
     }
 
 });
