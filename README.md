@@ -13,7 +13,7 @@ A Chrome extension that uses AI to analyze YouTube videos and provide concise, f
   3. Direct page content analysis
 - **Customizable AI Analysis**: Offers user control over:
   - Skepticism levels (temperature: 0.2 - 0.8)
-  - Summary length (100-400 words)
+  - Summary length (50-400 words)
   - Refresh functionality for alternative summaries.
 
 ## 🚀 Features
@@ -33,6 +33,10 @@ A Chrome extension that uses AI to analyze YouTube videos and provide concise, f
   - Summary Length Customization
   - One-Click Refresh
   - Secure API Key Management
+
+## 🧪 Testing the Plugin
+
+To test the functionality of the Clickbait Digest plugin, you can use the provided `test.html` file. You can also test it online at [Clickbait Digest Test](https://zlpgm3.csb.app/).
 
 ## 💻 Installation
 
@@ -60,7 +64,7 @@ A Chrome extension that uses AI to analyze YouTube videos and provide concise, f
    - Low (0.2): More accepting
    - Medium (0.5): Balanced analysis
    - High (0.8): Highly critical
-4. Adjust summary length (100-400 words).
+4. Adjust summary length (50-400 words).
 5. Read the AI-generated summary.
 6. Use refresh for alternative perspectives.
 

@@ -5,14 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clickbait-Digest</title>
     <style>
-      /* (The CSS remains largely the same, with minor adjustments) */
       body {
         font-family: sans-serif;
-        margin: 2vw;
-        width: 90vw;
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 2rem;
+        box-sizing: border-box;
+      }
+
+      .container {
+        width: 90%;
         max-width: 600px;
-        min-height: 90vh;
-        position: relative;
         display: flex;
         flex-direction: column;
         gap: 1rem;
@@ -285,45 +291,46 @@
     />
   </head>
   <body>
-    <h2>Clickbait Digest</h2>
+    <div class="container">
+      <h2>Clickbait Digest</h2>
 
-    <label for="youtubeUrl">YouTube URL:</label>
-    <input
-      type="text"
-      id="youtubeUrl"
-      placeholder="Paste YouTube video URL here"
-    />
+      <input
+        type="text"
+        id="youtubeUrl"
+        placeholder="Paste YouTube video URL here"
+      />
 
-    <div id="main">
-      <!-- main div -->
-      <div class="temp-buttons">
-        <button data-prompt-type="low">Low Skepticism</button>
-        <button data-prompt-type="medium" class="selected">
-          Medium Skepticism
-        </button>
-        <button data-prompt-type="high">High Skepticism</button>
+      <div id="main">
+        <!-- main div -->
+        <div class="temp-buttons">
+          <button data-prompt-type="low">Low Skepticism</button>
+          <button data-prompt-type="medium" class="selected">
+            Medium Skepticism
+          </button>
+          <button data-prompt-type="high">High Skepticism</button>
+        </div>
+        <div class="slider-container">
+          <label for="length">Summary Length:</label>
+          <input
+            type="range"
+            id="length"
+            min="50"
+            max="400"
+            step="1"
+            value="50"
+          />
+          <span id="lengthValue">50 words</span>
+        </div>
+        <button id="summarizeBtn">Summarize</button>
+
+        <textarea id="summary" placeholder="Loading..."></textarea>
       </div>
-      <div class="slider-container">
-        <label for="length">Summary Length:</label>
-        <input
-          type="range"
-          id="length"
-          min="100"
-          max="400"
-          step="1"
-          value="250"
-        />
-        <span id="lengthValue">250 words</span>
-      </div>
-      <button id="summarizeBtn">Summarize</button>
-
-      <textarea id="summary" placeholder="Loading..."></textarea>
+      <div id="error"></div>
     </div>
-    <div id="error"></div>
 
     <script>
       // --- API KEY (HARDCODED - SEE SECURITY NOTES ABOVE) ---
-      const geminiApiKey = "GEMINI_API_KEY"; // Replace with your actual API key
+      const geminiApiKey = "YOUR_GEMINI_API_HERE"; // Replace with your actual API key
 
       document.addEventListener("DOMContentLoaded", function () {
         const summaryTextArea = document.getElementById("summary");
@@ -334,7 +341,7 @@
         const lengthSlider = document.getElementById("length");
         const lengthValueSpan = document.getElementById("lengthValue");
 
-        let selectedLength = 250; // Default length
+        let selectedLength = 50; // Default length
 
         // --- Prompts --- (Remains the same)
         const prompts = {
