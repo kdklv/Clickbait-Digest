@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const tempButtons = document.querySelectorAll('.temp-buttons button');
     const lengthSlider = document.getElementById('length');
     const lengthValueSpan = document.getElementById('lengthValue');
+    const loadingOverlay = document.querySelector('.loading-overlay');
 
     // Settings elements
     const apiKeyInput = document.getElementById('apiKey');
@@ -15,8 +16,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const mainDiv = document.getElementById('main');
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 
+    // Add summarization state tracking
+    let isSummarizing = false;
 
-    let selectedLength = 250; // Default length: 250 words
+    let selectedLength = 50; // Default to 50 words
     let geminiApiKey = null;
 
     // --- Prompts ---
@@ -59,9 +62,11 @@ Summary:`,
             // If API key is loaded, hide settings, show main content and start
             settingsDiv.classList.add('hidden');
             mainDiv.classList.remove('hidden');
+            // Show loading overlay immediately
+            loadingOverlay.classList.add('visible');
             startSummaryGeneration();
         } else {
-            // Show settigns if no API key
+            // Show settings if no API key
             settingsDiv.classList.remove('hidden');
             mainDiv.classList.add('hidden');
         }
@@ -84,10 +89,17 @@ Summary:`,
 
     // --- Button Click Handlers ---
     refreshBtn.addEventListener('click', function() {
+        // Prevent re-triggering if already summarizing
+        if (isSummarizing) {
+            return;
+        }
+        
         errorDiv.textContent = ''; // Clear previous error
-        summaryTextArea.value = 'Loading...'; // Set loading text
-        summaryTextArea.classList.add('loading'); // Show spinner
-        summaryTextArea.innerHTML = '<div class="spinner"></div>';
+        loadingOverlay.classList.add('visible');
+        
+        // Disable buttons during summarization
+        setButtonsState(true);
+        
         startSummaryGeneration(); // Call the main function
     });
     // --- Save API Key Button ---
@@ -100,8 +112,9 @@ Summary:`,
                 geminiApiKey = apiKey; // Update the global variable
                 setTimeout(() => {
                     successMessageDiv.classList.add('hidden'); // Hide message
-                     settingsDiv.classList.add('hidden'); // Hide settings
+                    settingsDiv.classList.add('hidden'); // Hide settings
                     mainDiv.classList.remove('hidden'); // Show main content
+                    loadingOverlay.classList.add('visible'); // Show loading animation
                     startSummaryGeneration();// and start
                 }, 2000);
 
@@ -124,8 +137,8 @@ Summary:`,
          // Check if API key is loaded before proceeding
         if (!geminiApiKey) {
             displayMessage('API key not set. Please enter your Gemini API key in the settings.', 'red');
-             summaryTextArea.classList.remove('loading');
-            summaryTextArea.value = '';
+            loadingOverlay.classList.remove('visible');
+            setButtonsState(false); // Re-enable buttons
             return; // Stop execution if no API key
         }
         chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
@@ -135,8 +148,8 @@ Summary:`,
                 getVideoTranscript(videoId, tab.title, tab.id);
             } else {
                 displayMessage('Not a YouTube video page.', 'red');
-                summaryTextArea.value = '';
-                summaryTextArea.classList.remove('loading'); //remove loading
+                loadingOverlay.classList.remove('visible');
+                setButtonsState(false); // Re-enable buttons
             }
         });
     }
@@ -173,8 +186,8 @@ Summary:`,
         } catch (error) {
             console.error("Error in getVideoTranscript:", error);
             displayMessage(error.message, 'red');
-            summaryTextArea.value = '';
-            summaryTextArea.classList.remove('loading'); // Remove spinner
+            loadingOverlay.classList.remove('visible');
+            setButtonsState(false); // Re-enable buttons
         }
     }
 
@@ -338,27 +351,34 @@ async function scrapeTranscript(tabId) {
     }
     async function generateSummaryFromPageContent(videoTitle, pageContent, length) {
         console.log("generateSummaryFromPageContent called");
-           try {
+        try {
             const question = extractQuestionFromTitle(videoTitle);
             const selectedPromptType = document.querySelector('.temp-buttons .selected').dataset.promptType;
-            const prompt = prompts[selectedPromptType](videoTitle, question, pageContent, length); // Use the selected prompt
+            const prompt = prompts[selectedPromptType](videoTitle, question, pageContent, length);
 
-            const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiApiKey, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: prompt
-                        }]
-                    }],
-                    generationConfig: {
-                     temperature: 0.5,  //Fixed temperature
-                    }
-                })
-            });
+            const response = await fetch(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiApiKey,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        contents: [
+                            {
+                                parts: [
+                                    {
+                                        text: prompt,
+                                    },
+                                ],
+                            },
+                        ],
+                        generationConfig: {
+                            temperature: 0.5, // Fixed temperature
+                        },
+                    }),
+                }
+            );
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -366,19 +386,29 @@ async function scrapeTranscript(tabId) {
             }
 
             const data = await response.json();
-             if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+            if (
+                data.candidates &&
+                data.candidates[0] &&
+                data.candidates[0].content &&
+                data.candidates[0].content.parts &&
+                data.candidates[0].content.parts[0]
+            ) {
                 const summary = data.candidates[0].content.parts[0].text;
                 typewriterEffect(summaryTextArea, summary);
             } else {
                 console.error("Unexpected response structure:", data);
-                throw new Error("Gemini API returned an unexpected response structure.");
+                throw new Error(
+                    "Gemini API returned an unexpected response structure."
+                );
             }
-
         } catch (error) {
             displayMessage(error.message, 'red');
-             summaryTextArea.value = '';
+            summaryTextArea.value = "";
+            loadingOverlay.classList.remove('visible');
+            setButtonsState(false); // Re-enable buttons on error
         } finally {
-             summaryTextArea.classList.remove('loading');
+            loadingOverlay.classList.remove('visible');
+            // Remove setButtonsState here as it will be called after typewriter effect
         }
     }
 
@@ -387,24 +417,31 @@ async function scrapeTranscript(tabId) {
         try {
             const question = extractQuestionFromTitle(videoTitle);
             const selectedPromptType = document.querySelector('.temp-buttons .selected').dataset.promptType;
-            const prompt = prompts[selectedPromptType](videoTitle, question, transcript, length); // Select prompt based on button
+            const prompt = prompts[selectedPromptType](videoTitle, question, transcript, length);
 
-            const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiApiKey, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: prompt
-                        }]
-                    }],
-                    generationConfig: {
-                         temperature: 0.5, //Fixed temperature
-                    }
-                })
-            });
+            const response = await fetch(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiApiKey,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        contents: [
+                            {
+                                parts: [
+                                    {
+                                        text: prompt,
+                                    },
+                                ],
+                            },
+                        ],
+                        generationConfig: {
+                            temperature: 0.5, // Fixed temperature
+                        },
+                    }),
+                }
+            );
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -412,18 +449,29 @@ async function scrapeTranscript(tabId) {
             }
 
             const data = await response.json();
-            if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+            if (
+                data.candidates &&
+                data.candidates[0] &&
+                data.candidates[0].content &&
+                data.candidates[0].content.parts &&
+                data.candidates[0].content.parts[0]
+            ) {
                 const summary = data.candidates[0].content.parts[0].text;
                 typewriterEffect(summaryTextArea, summary);
             } else {
                 console.error("Unexpected response structure:", data);
-                throw new Error("Gemini API returned an unexpected response structure.");
+                throw new Error(
+                    "Gemini API returned an unexpected response structure."
+                );
             }
         } catch (error) {
             displayMessage(error.message, 'red');
-             summaryTextArea.value = '';
+            summaryTextArea.value = "";
+            loadingOverlay.classList.remove('visible');
+            setButtonsState(false); // Re-enable buttons on error
         } finally {
-          summaryTextArea.classList.remove('loading');
+            loadingOverlay.classList.remove('visible');
+            // Remove setButtonsState here as it will be called after typewriter effect
         }
     }
 
@@ -510,10 +558,34 @@ async function scrapeTranscript(tabId) {
                 setTimeout(type, speed);
             } else {
                 element.classList.remove('typing');
+                setButtonsState(false); // Only re-enable buttons after typing is complete
             }
         }
         
         type();
+    }
+
+    // Helper function to enable/disable buttons
+    function setButtonsState(disabled) {
+        isSummarizing = disabled;
+        
+        // Disable/enable refresh button
+        if (disabled) {
+            refreshBtn.classList.add('disabled');
+            refreshBtn.setAttribute('title', 'Summarization in progress...');
+        } else {
+            refreshBtn.classList.remove('disabled');
+            refreshBtn.setAttribute('title', 'Refresh');
+        }
+        
+        // Disable/enable temperature buttons
+        tempButtons.forEach(button => {
+            if (disabled) {
+                button.classList.add('disabled');
+            } else {
+                button.classList.remove('disabled');
+            }
+        });
     }
 
 });
