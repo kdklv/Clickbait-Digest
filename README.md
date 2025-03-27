@@ -42,7 +42,7 @@ To test the functionality of the Clickbait Digest plugin, you can use the provid
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/clickbait-digest.git
+   git clone https://github.com/kdklv/clickbait-digest.git
    ```
 
 2. Enable Chrome Developer Mode:
